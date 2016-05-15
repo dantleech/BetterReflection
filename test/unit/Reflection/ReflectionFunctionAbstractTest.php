@@ -15,10 +15,13 @@ use BetterReflection\SourceLocator\Type\SingleFileSourceLocator;
 use BetterReflection\SourceLocator\Type\StringSourceLocator;
 use phpDocumentor\Reflection\Types\Boolean;
 use phpDocumentor\Reflection\Types\Integer;
+use PhpParser\Node\Expr\BinaryOp;
+use PhpParser\Node\Scalar\LNumber;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Break_;
 use PhpParser\Node\Stmt\Echo_;
 use PhpParser\Node\Stmt\Function_;
+use PhpParser\Node\Stmt\Return_;
 use PhpParser\PrettyPrinter\Standard as StandardPrettyPrinter;
 
 /**
@@ -523,7 +526,7 @@ class ReflectionFunctionAbstractTest extends \PHPUnit_Framework_TestCase
                 new String_('Hello world!')
             ]),
         ]);
-        
+
         $this->assertSame("echo 'Hello world!';", $function->getBodyCode());
     }
 
@@ -560,5 +563,36 @@ class ReflectionFunctionAbstractTest extends \PHPUnit_Framework_TestCase
         $function->removeParameter('a');
 
         $this->assertStringStartsWith('function foo($b)', (new \PhpParser\PrettyPrinter\Standard())->prettyPrint([$function->getAst()]));
+    }
+
+    public function testGetReturnStatementAstReturnsStatements()
+    {
+        $php = <<<'PHP'
+<?php
+function foo($a) {
+    if ($a) {
+        return 0;
+    }
+
+    return ($a + 3);
+}
+PHP;
+
+        $reflector = new FunctionReflector(new StringSourceLocator($php));
+        $function = $reflector->reflect('foo');
+
+        $nodes = $function->getReturnStatementsAst();
+
+        $this->assertCount(2, $nodes);
+        $this->assertContainsOnlyInstancesOf(Return_::class, $nodes);
+
+        reset($nodes);
+        /** @var Return_ $first */
+        $first = current($nodes);
+        /** @var Return_ $second */
+        $second = next($nodes);
+
+        $this->assertInstanceOf(LNumber::class, $first->expr);
+        $this->assertInstanceOf(BinaryOp\Plus::class, $second->expr);
     }
 }
